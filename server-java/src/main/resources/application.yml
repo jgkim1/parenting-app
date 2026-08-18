@@ -1,0 +1,32 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/parenting_app?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul
+    username: root
+    password: mysql
+  jpa:
+    hibernate:
+      # 개발 편의용: 엔티티 기준으로 테이블을 자동 생성/갱신한다(Prisma의 migrate dev와 유사한 역할).
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+
+uploads:
+  dir: uploads
+
+app:
+  jwt:
+    access-secret: changeme-access-secret
+    refresh-secret: changeme-refresh-secret
+    access-expires-minutes: 15
+    refresh-expires-days: 14
+  google:
+    client-id: ""

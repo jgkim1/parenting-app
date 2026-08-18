@@ -1,0 +1,37 @@
+# Node / server
+server/node_modules/
+server/dist/
+server/.env
+server/.env.test
+server/*.log
+server/uploads/
+
+# Spring Boot / server-java
+server-java/target/
+server-java/uploads/
+server-java/.env
+
+# Prisma
+server/prisma/migrations/dev.db*
+
+# Flutter / app
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/build/
+app/.pub-cache/
+app/.pub/
+app/web/.dart_tool/
+app/*.iml
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local

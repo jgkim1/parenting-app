@@ -1,0 +1,287 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  SELLER
+  ADMIN
+}
+
+enum AuthProvider {
+  LOCAL
+  KAKAO
+  GOOGLE
+}
+
+enum ChildGender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PREPARING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+// 광고 배너가 삽입되는 화면 자리. 앱 쪽 AdBanner 삽입 지점과 1:1로 대응한다.
+enum AdPlacement {
+  TODAY
+  PRODUCT_LIST
+  ARTICLE_LIST
+  COMMUNITY_LIST
+  PRODUCT_DETAIL
+  POST_DETAIL
+}
+
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  // 소셜 로그인 계정은 비밀번호가 없으므로 optional. LOCAL 계정만 필수로 채운다.
+  passwordHash String?
+  nickname     String
+  role         UserRole     @default(CUSTOMER)
+  provider     AuthProvider @default(LOCAL)
+  // 프로바이더가 내려주는 사용자 고유 id(카카오 id, 구글 sub). LOCAL 계정은 null.
+  providerId   String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  children      Child[]
+  articles      Article[]
+  posts         Post[]
+  comments      Comment[]
+  likes         Like[]
+  orders        Order[]
+  reviews       Review[]
+  cart          Cart?
+  products      Product[]
+  refreshTokens RefreshToken[]
+
+  @@unique([provider, providerId])
+  @@index([email])
+}
+
+// 육아 프로필(개인화용) - 한 부모가 여러 자녀를 등록할 수 있음
+model Child {
+  id        String       @id @default(uuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nickname  String
+  gender    ChildGender?
+  birthDate DateTime
+  createdAt DateTime     @default(now())
+
+  @@index([userId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Category {
+  id       String     @id @default(uuid())
+  name     String     @unique
+  slug     String     @unique
+  parentId String?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  sellerId    String
+  seller      User     @relation(fields: [sellerId], references: [id])
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id])
+  name        String
+  description String
+  price       Int // 원 단위 정수 (KRW는 소수점 없음)
+  stock       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  images     ProductImage[]
+  reviews    Review[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@index([categoryId])
+  @@index([sellerId])
+  @@index([name])
+}
+
+model ProductImage {
+  id        String  @id @default(uuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  sortOrder Int     @default(0)
+
+  @@index([productId])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  rating    Int // 1~5
+  content   String
+  createdAt DateTime @default(now())
+
+  @@unique([productId, userId])
+  @@index([productId])
+}
+
+model Cart {
+  id     String     @id @default(uuid())
+  userId String     @unique
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  CartItem[]
+}
+
+model CartItem {
+  id        String  @id @default(uuid())
+  cartId    String
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int     @default(1)
+
+  @@unique([cartId, productId])
+}
+
+model Order {
+  id           String      @id @default(uuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  status       OrderStatus @default(PENDING_PAYMENT)
+  totalAmount  Int
+  shippingAddr String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  items OrderItem[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model OrderItem {
+  id           String  @id @default(uuid())
+  orderId      String
+  order        Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product @relation(fields: [productId], references: [id])
+  quantity     Int
+  priceAtOrder Int // 주문 시점 가격 스냅샷
+
+  @@index([orderId])
+}
+
+// 육아 정보 아티클(매거진) 카테고리 - 예방접종, 이유식, 수면교육 등 주제별 분류
+model ArticleCategory {
+  id       String    @id @default(uuid())
+  name     String    @unique
+  slug     String    @unique
+  articles Article[]
+}
+
+// 관리자가 작성하는 육아 정보 콘텐츠. 상품과 달리 가격/재고가 없는 순수 정보성 글.
+model Article {
+  id            String          @id @default(uuid())
+  authorId      String
+  author        User            @relation(fields: [authorId], references: [id])
+  categoryId    String
+  category      ArticleCategory @relation(fields: [categoryId], references: [id])
+  title         String
+  content       String
+  thumbnailUrl  String?
+  isActive      Boolean         @default(true)
+  viewCount     Int             @default(0)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([categoryId])
+  @@index([createdAt])
+}
+
+// 관리자가 등록하는 광고 배너. 삭제는 하드 삭제, 노출 중지는 isActive로 한다.
+model Ad {
+  id        String      @id @default(uuid())
+  placement AdPlacement
+  title     String
+  imageUrl  String
+  linkUrl   String?
+  isActive  Boolean     @default(true)
+  sortOrder Int         @default(0)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([placement])
+}
+
+model Post {
+  id        String   @id @default(uuid())
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  title     String
+  content   String
+  category  String?
+  imageUrl  String?
+  viewCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comments Comment[]
+  likes    Like[]
+
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([postId])
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+  @@index([postId])
+}
